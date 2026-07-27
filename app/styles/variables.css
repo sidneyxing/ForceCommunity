@@ -1,0 +1,20 @@
+/* variables.css - generated from cleaned globals.css. */
+:root {
+  --ivory: #faf7f1;
+  --paper: #fffdf8;
+  --sand: #f3e8d8;
+  --charcoal: #2a211e;
+  --muted: #7c6e66;
+  --red: #9b111e;
+  --red-2: #c7372e;
+  --gold: #d4af37;
+  --gold-2: #f4d06f;
+  --bronze: #a9702f;
+  --brown: #2a1b17;
+  --graphite: #211714;
+  --line: rgba(145, 98, 34, 0.18);
+  --glass: rgba(255, 253, 248, 0.76);
+  --glass-strong: rgba(255, 253, 248, 0.92);
+  --shadow: 0 24px 70px rgba(89, 38, 18, 0.14);
+  --radius: 18px;
+}

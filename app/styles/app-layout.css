@@ -1,0 +1,533 @@
+/* app-layout.css - generated from cleaned globals.css. */
+.sidebar {
+  background: linear-gradient(180deg, var(--graphite), var(--brown));
+  color: #fff5e5;
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+  min-height: 100vh;
+  padding: 1rem;
+  position: sticky;
+  top: 0;
+}
+
+.side-logo {
+  align-items: center;
+  display: flex;
+  gap: 0.7rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.side-logo img {
+  height: 54px;
+  object-fit: contain;
+  width: 54px;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.sidebar nav button,
+.bottom-nav button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-weight: 800;
+  opacity: 0.74;
+  padding: 0.86rem 0.9rem;
+  text-align: left;
+}
+
+.sidebar nav button:not(:last-child) {
+  border-bottom: 1px solid rgba(244, 208, 111, 0.1);
+}
+
+.sidebar nav button.is-active {
+  background: linear-gradient(135deg, rgba(155, 17, 30, 0.9), rgba(212, 175, 55, 0.18));
+  border-radius: 12px;
+  opacity: 1;
+}
+
+.daily-flame {
+  align-items: center;
+  background:
+    radial-gradient(circle at 16% 20%, rgba(244, 208, 111, 0.18), transparent 6rem),
+    linear-gradient(145deg, rgba(255, 253, 248, 0.08), rgba(78, 34, 27, 0.42));
+  border: 1px solid rgba(244, 208, 111, 0.34);
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 38px rgba(0, 0, 0, 0.22);
+  display: flex;
+  gap: 0.85rem;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  padding: 1rem;
+  position: relative;
+}
+
+.daily-flame::after {
+  animation: flameGlow 2.8s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(244, 208, 111, 0.18), transparent 62%);
+  content: "";
+  height: 120px;
+  position: absolute;
+  right: -44px;
+  top: -44px;
+  width: 120px;
+}
+
+.daily-flame-icon {
+  background-color: rgba(255, 253, 248, 0.08);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  border: 1px solid rgba(244, 208, 111, 0.3);
+  border-radius: 16px;
+  box-shadow: 0 12px 28px rgba(155, 17, 30, 0.22), inset 0 0 20px rgba(155, 17, 30, 0.18);
+  display: block;
+  flex: 0 0 76px;
+  height: 76px;
+  object-fit: contain;
+  padding: 2px;
+  position: relative;
+  z-index: 1;
+  width: 76px;
+}
+
+.daily-flame strong {
+  color: var(--gold-2);
+  display: block;
+  font-size: 2rem;
+  line-height: 1;
+  margin: 0.25rem 0;
+  position: relative;
+  z-index: 1;
+}
+
+.daily-flame span,
+.daily-flame small {
+  position: relative;
+  z-index: 1;
+}
+
+.topbar h2 {
+  margin: 0;
+}
+
+.icon-btn {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: none;
+  height: 42px;
+  width: 42px;
+}
+
+.profile-pill {
+  align-items: center;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.35rem 0.35rem 0.35rem 0.9rem;
+}
+
+.profile-pill span {
+  display: grid;
+  line-height: 1.15;
+  text-align: right;
+}
+
+.profile-pill img {
+  height: 44px;
+  object-fit: cover;
+  width: 44px;
+}
+
+.profile-pill .fp-chip {
+  color: var(--red);
+  font-weight: 1000;
+}
+
+.footer {
+  align-items: start;
+  background: rgba(255, 253, 248, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1.2fr 1fr 1fr auto;
+  margin-top: 1rem;
+  padding: 1rem;
+}
+
+.footer img {
+  height: 58px;
+  width: 58px;
+}
+
+.footer a,
+.footer small {
+  display: block;
+  margin-top: 0.28rem;
+}
+
+.bottom-nav {
+  display: none;
+}
+
+.profile-pill {
+  min-width: 220px;
+  white-space: nowrap;
+}
+
+.profile-pill > span:first-child {
+  display: grid;
+  min-width: 112px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.profile-pill small {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-width: 108px;
+  white-space: nowrap;
+}
+
+.profile-pill .fp-chip,
+.profile-pill .fp-value {
+  display: inline-flex;
+}
+
+.profile-pill .fp-chip {
+  justify-content: center;
+  min-width: 0;
+}
+
+.profile-pill > .avatar-ring img {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.stat-card .fp-chip,
+.member-level-cell .fp-chip,
+.member-profile-stats .fp-chip,
+.profile-stat-grid .fp-chip,
+.leader-row .fp-chip,
+.legend-person .fp-chip,
+.duel-history-item .fp-chip,
+.duel-result-card .fp-chip,
+.profile-pill .fp-chip {
+  color: var(--red);
+}
+
+/* Daily flame: prevent text wrapping */
+.daily-flame {
+  align-items: center;
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: 72px minmax(142px, 1fr);
+  min-height: 112px;
+  overflow: visible;
+  padding: 1rem;
+}
+
+.daily-flame-icon {
+  align-self: center;
+  flex-basis: 72px;
+  height: 72px;
+  width: 72px;
+}
+
+.daily-flame > div {
+  align-content: center;
+  display: grid;
+  gap: 0.22rem;
+  min-width: 142px;
+  overflow: visible;
+}
+
+.daily-flame > div > span,
+.daily-flame strong {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.daily-flame > div > span {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.05;
+}
+
+.daily-flame strong {
+  display: block;
+  font-size: clamp(2.2rem, 2.45vw, 2.85rem);
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+}
+
+.daily-flame small {
+  display: none;
+}
+
+.duel-result-card .fp-diamond,
+.leader-row .fp-diamond,
+.legend-person .fp-diamond,
+.duel-history-item .fp-diamond,
+.profile-pill .fp-diamond {
+  --fp-size: 0.72em;
+}
+
+#__next,
+body > div:first-child {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.app-view {
+  --sidebar-width: 300px;
+  --shell-x: clamp(1rem, 3vw, 2rem);
+  --topbar-height: 96px;
+  height: auto !important;
+  margin: 0 !important;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+.app-shell {
+  height: auto !important;
+  isolation: isolate;
+  min-width: 0;
+  overflow: visible !important;
+}
+
+.topbar {
+  align-items: center;
+  backdrop-filter: blur(18px);
+  background: rgba(255, 253, 248, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 0 0 18px 18px;
+  box-shadow: 0 16px 45px rgba(79, 39, 18, 0.1);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: var(--topbar-height);
+  margin: 0;
+  min-height: var(--topbar-height);
+  padding: 0.62rem var(--shell-x);
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 100;
+}
+
+/* ===============================
+   APP SPACING FIX
+================================ */
+/* desktop */
+@media (min-width: 861px) {
+  .app-view {
+    --sidebar-width: 300px;
+    --shell-x: clamp(1rem, 3vw, 2rem);
+    --topbar-height: 96px;
+
+    /* atur ini untuk mendekatkan konten ke header */
+    --content-top-lift: 6rem;
+
+    display: block;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .sidebar {
+    bottom: 0;
+    height: 100vh;
+    height: 100dvh;
+    left: 0;
+    margin: 0;
+    max-height: 100vh;
+    max-height: 100dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    position: fixed;
+    top: 0;
+    width: var(--sidebar-width);
+    z-index: 80;
+  }
+
+  .app-shell {
+    margin: 0 0 0 var(--sidebar-width);
+    min-height: 100vh;
+    min-height: 100dvh;
+    min-width: 0;
+    overflow: visible;
+
+    /* header tetap 96px, kiri-kanan tetap, konten dinaikkan */
+    padding: calc(var(--topbar-height) - var(--content-top-lift)) var(--shell-x) 2rem !important;
+  }
+
+  .topbar {
+    align-items: center;
+    border-radius: 0 0 18px 18px;
+    height: var(--topbar-height);
+    left: var(--sidebar-width);
+    margin: 0;
+    min-height: var(--topbar-height);
+    padding: 0.65rem var(--shell-x);
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: auto;
+    z-index: 100;
+  }
+}
+
+/* mobile */
+@media (max-width: 860px) {
+  .app-view {
+    --sidebar-width: 0px;
+    --shell-x: clamp(0.85rem, 3vw, 1.25rem);
+    --topbar-height: 84px;
+
+    /* atur ini untuk HP */
+    --content-top-lift: 6rem;
+
+    display: block;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .app-shell {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible;
+
+    /* header tetap 84px, kiri-kanan tetap, konten dinaikkan */
+    padding: calc(var(--topbar-height) - var(--content-top-lift)) var(--shell-x) 5.5rem !important;
+  }
+
+  .topbar {
+    border-radius: 0 0 18px 18px;
+    height: var(--topbar-height);
+    left: 0;
+    margin: 0;
+    min-height: var(--topbar-height);
+    padding: 0.65rem var(--shell-x);
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: auto;
+    z-index: 100;
+  }
+
+  .topbar > div .eyebrow {
+    line-height: 1.15;
+    margin-bottom: 0.18rem;
+  }
+
+  .topbar > div h2 {
+    line-height: 1.05;
+  }
+
+  .sidebar {
+    bottom: 0;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    top: 0;
+    z-index: 120;
+  }
+
+  .sidebar.is-open,
+  body.sidebar-open .sidebar {
+    z-index: 1001;
+  }
+
+  body.sidebar-open::before {
+    z-index: 1000;
+  }
+
+  body.sidebar-open .topbar {
+    z-index: 20;
+  }
+}
+
+.app-shell > .page,
+.app-shell > .page.is-active,
+.page.is-active {
+  animation: none !important;
+  height: auto !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+.app-shell,
+.page.is-active,
+.sidebar {
+  scroll-margin-top: 0 !important;
+  scroll-padding-top: 0 !important;
+}
+
+.profile-pill small {
+  min-width: auto;
+}
+
+body:has(.app-view),
+body.auth-screen-open:has(.app-view),
+body.modal-open:has(.app-view) {
+  height: auto !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  touch-action: auto !important;
+}
+
+body.auth-screen-open,
+body.modal-open,
+body.sidebar-open {
+  height: auto !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  position: static !important;
+  touch-action: auto !important;
+  overscroll-behavior: auto !important;
+}
+
+.app-view,
+.app-shell,
+main,
+.page,
+.page.is-active {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body.sidebar-open::before {
+  pointer-events: none !important;
+}

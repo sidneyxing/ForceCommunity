@@ -1,0 +1,283 @@
+/* pages/auth.css - generated from cleaned globals.css. */
+.auth-view {
+  align-content: start;
+  align-items: start;
+  display: grid;
+  gap: clamp(0.85rem, 2vw, 1.4rem);
+  grid-template-columns: minmax(240px, 0.82fr) minmax(320px, 520px);
+  min-height: 100svh;
+  height: auto;
+  overflow: visible;
+  padding: max(0.85rem, env(safe-area-inset-top)) clamp(1rem, 3vw, 3rem) max(0.85rem, env(safe-area-inset-bottom));
+}
+
+.auth-brand {
+  justify-self: center;
+  text-align: center;
+}
+
+.auth-brand img {
+  filter: drop-shadow(0 20px 32px rgba(120, 72, 10, 0.22));
+  margin: 0 auto;
+  width: min(360px, 80vw);
+}
+
+.auth-brand p {
+  color: var(--brown);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  margin: -1rem 0 0;
+  text-transform: uppercase;
+}
+
+.auth-card,
+.card,
+.table-card,
+.legend-card,
+.settings-card,
+.badge-detail,
+.profile-mini {
+  background: var(--glass);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(24px) saturate(1.1);
+}
+
+.auth-card {
+  border-radius: 24px;
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: contain;
+  padding: clamp(1rem, 3vw, 2rem);
+  scrollbar-width: thin;
+}
+
+.auth-card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.auth-card::-webkit-scrollbar-thumb {
+  background: rgba(155, 17, 30, 0.22);
+  border-radius: 999px;
+}
+
+.auth-tabs {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.3rem;
+}
+
+.auth-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  flex: 1;
+  font-weight: 800;
+  padding: 0.65rem 0.7rem;
+}
+
+.auth-tabs button.is-active {
+  background: linear-gradient(135deg, #fff, #f7ead7);
+  color: var(--red);
+  box-shadow: 0 10px 28px rgba(92, 47, 18, 0.12);
+}
+
+.auth-panel {
+  display: none;
+}
+
+.auth-panel.is-active {
+  animation: panelIn 260ms ease both;
+  display: block;
+}
+
+.auth-panel h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  margin: 0 0 1rem;
+}
+
+.otp-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(6, 1fr);
+  margin: 1rem 0;
+  width: 100%;
+}
+
+.otp-grid input {
+  font-size: 1.4rem;
+  font-weight: 900;
+  min-height: 58px;
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+  width: 100%;
+}
+
+.dev-otp {
+  background: rgba(244, 208, 111, 0.18);
+  border-radius: 12px;
+  color: #7b3a00;
+  font-weight: 800;
+  padding: 0.65rem;
+}
+
+.reset-confirm {
+  background: rgba(155, 17, 30, 0.06);
+  border: 1px solid rgba(155, 17, 30, 0.16);
+  border-radius: 16px;
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 0.85rem;
+}
+
+/* Admin reset / contact */
+.admin-contact-box {
+  background: rgba(255, 253, 248, 0.68);
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  border-radius: 16px;
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 1rem;
+}
+
+.admin-contact-box strong,
+.admin-reset-card h3 {
+  color: var(--red);
+}
+
+.admin-reset-card {
+  border-color: rgba(155, 17, 30, 0.18);
+}
+
+.admin-reset-card .btn {
+  width: 100%;
+}
+
+/* ---------- 2. Auth screen ---------- */
+body.auth-screen-open {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: auto !important;
+  touch-action: auto !important;
+  height: auto !important;
+  position: static !important;
+}
+
+body.auth-screen-open .auth-view:not(.is-hidden) {
+  inset: auto !important;
+  position: relative !important;
+  z-index: auto !important;
+}
+
+.auth-view {
+  align-content: start !important;
+  align-items: start !important;
+  height: auto !important;
+  min-height: 100svh !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: clamp(0.85rem, 2vw, 1.25rem) clamp(1rem, 3vw, 3rem) !important;
+}
+
+.auth-card {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.auth-view-login .auth-card {
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+/* Keep the auth identity above the form on phones and tablet-sized screens. */
+@media (max-width: 1024px) {
+  .auth-view {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: clamp(0.5rem, 2vw, 0.9rem) !important;
+    justify-items: center;
+  }
+
+  .auth-brand {
+    width: 100%;
+  }
+
+  .auth-brand img {
+    display: block;
+    width: min(190px, 42vw) !important;
+  }
+
+  .auth-card {
+    justify-self: center;
+    width: min(100%, 620px);
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-view {
+    gap: 1.2rem !important;
+    padding: max(0.65rem, env(safe-area-inset-top)) 0.75rem max(0.75rem, env(safe-area-inset-bottom)) !important;
+  }
+
+  .auth-brand img {
+    width: min(180px, 46vw) !important;
+  }
+}
+
+/* ---------- 3. Utilities ---------- */
+.field-help,
+.locked-note {
+  color: var(--muted);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.password-help {
+  background: linear-gradient(135deg, rgba(155, 17, 30, 0.07), rgba(244, 208, 111, 0.13));
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+}
+
+.locked-input {
+  background: linear-gradient(135deg, rgba(255, 253, 248, 0.7), rgba(246, 234, 219, 0.62)) !important;
+  color: var(--muted) !important;
+  cursor: not-allowed;
+}
+
+.auth-view,
+body.auth-screen-open .auth-view:not(.is-hidden) {
+  position: relative !important;
+  inset: auto !important;
+  height: auto !important;
+  min-height: 100svh !important;
+  max-height: none !important;
+  overflow: visible !important;
+  align-content: start !important;
+  align-items: start !important;
+}
+
+.auth-card,
+.card,
+.table-card,
+.legend-card,
+.settings-card,
+.badge-detail,
+.profile-mini,
+.duel-panel,
+.page[data-view="duel"] .duel-panel {
+  max-height: none !important;
+  overflow: visible !important;
+}

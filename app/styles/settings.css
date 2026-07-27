@@ -1,0 +1,102 @@
+/* pages/settings.css - generated from cleaned globals.css. */
+.settings-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+}
+
+.settings-card h3 {
+  margin-top: 0;
+}
+
+.profile-stats {
+  grid-column: auto;
+}
+
+.profile-stat-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.profile-stat-grid div {
+  background: rgba(255, 255, 255, 0.54);
+  border-radius: 14px;
+  padding: 0.8rem;
+}
+
+.profile-stat-grid .copy-stat {
+  background:
+    radial-gradient(circle at 92% 12%, rgba(244, 208, 111, 0.28), transparent 7rem),
+    rgba(255, 253, 248, 0.72);
+  border: 1px solid rgba(212, 175, 55, 0.24);
+}
+
+.profile-stat-grid span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.profile-stat-grid strong {
+  color: var(--red);
+  display: block;
+  font-size: 1.5rem;
+  margin-top: 0.25rem;
+}
+
+.copy-stat button {
+  background: linear-gradient(135deg, rgba(155, 17, 30, 0.94), rgba(111, 13, 21, 0.94));
+  border: 0;
+  border-radius: 999px;
+  color: #fff7e6;
+  font-size: 0.72rem;
+  font-weight: 900;
+  margin-top: 0.65rem;
+  min-height: 34px;
+  padding: 0.45rem 0.8rem;
+  text-transform: uppercase;
+}
+
+.profile-total-points {
+  border-color: rgba(155, 17, 30, 0.18);
+}
+
+@media (max-width: 860px) {
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .settings-grid > .settings-card {
+    grid-column: 1;
+    min-width: 0;
+    width: 100%;
+  }
+
+  #profileForm {
+    order: 1;
+  }
+
+  #settingsForm {
+    order: 2;
+  }
+
+  #profileStats {
+    order: 3;
+  }
+
+  .duel-history-card {
+    order: 4;
+  }
+
+  #changePasswordForm {
+    order: 5;
+  }
+
+  #adminResetPasswordForm {
+    order: 6;
+  }
+}

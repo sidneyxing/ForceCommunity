@@ -1,0 +1,135 @@
+/* pages/about.css */
+
+.about-hero {
+  align-items: center;
+  background: var(--glass-strong);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  margin-bottom: 1rem;
+  padding: clamp(1.6rem, 3vw, 2.4rem);
+}
+
+.about-hero h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.6rem, 6vw, 5rem);
+  line-height: 0.92;
+  margin: 0 0 1rem;
+}
+
+.about-hero > img {
+  align-self: center;
+  justify-self: center;
+  max-width: 250px;
+  width: 100%;
+  transform: translate(-16px, 14px);
+}
+
+.about-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.about-card {
+  background: var(--glass);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 16px;
+  padding: 1rem;
+}
+
+.about-card p {
+  align-items: baseline;
+  line-height: 1.5;
+}
+
+.about-fp-line,
+.about-fp-name,
+.about-inline-fp {
+  align-items: baseline;
+  color: var(--red);
+  display: inline-flex;
+  gap: 0.35rem;
+  justify-content: flex-start;
+  line-height: 1.45;
+  vertical-align: baseline;
+  white-space: normal;
+}
+
+.about-fp-line {
+  align-items: flex-start;
+}
+
+.about-fp-line img {
+  flex: 0 0 auto;
+  height: 1.7rem;
+  margin-top: 0.05rem;
+  object-fit: contain;
+  width: 1.7rem;
+}
+
+.about-fp-name {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.28rem;
+  font-weight: 900;
+}
+
+.about-fp-name img {
+  display: inline-block;
+  height: 1.1em;
+  object-fit: contain;
+  width: 1.1em;
+}
+
+@media (max-width: 760px) {
+  .about-hero {
+    gap: 1.1rem;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 1.5rem 1.25rem 1.7rem;
+    text-align: center;
+  }
+
+  .about-hero > img {
+    margin: 0 auto 0.2rem;
+    max-width: 190px;
+    order: 1;
+  }
+
+  .about-hero > div {
+    order: 2;
+    width:100%;
+    max-width:600px;
+  }
+
+  .about-hero .eyebrow {
+    max-width: none;
+    width: 100%;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    margin: 0 auto 0.8rem;
+    letter-spacing: 0.12em;
+    margin-top: 1rem 0.2rem;
+  }
+
+  .about-hero p {
+    max-width: 550px;
+    width: 100%;
+    margin: 0 auto;
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+
+  .about-hero h1 {
+    font-size: clamp(2.05rem, 10.5vw, 3rem);
+    line-height: 0.96;
+    margin-bottom: 0.85rem;
+  }
+
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+}

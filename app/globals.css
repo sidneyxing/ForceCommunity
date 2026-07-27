@@ -1,0 +1,17 @@
+/* FORCE Arena global stylesheet entrypoint.
+   Keep this file as imports only. Edit real styles in /app/styles/. */
+
+@import './styles/variables.css';
+@import './styles/reset.css';
+@import './styles/app-layout.css';
+@import './styles/shared.css';
+
+@import './styles/auth.css';
+@import './styles/home.css';
+@import './styles/duel.css';
+@import './styles/members.css';
+@import './styles/leaderboard.css';
+@import './styles/schools.css';
+@import './styles/shops.css';
+@import './styles/about.css';
+@import './styles/settings.css';
