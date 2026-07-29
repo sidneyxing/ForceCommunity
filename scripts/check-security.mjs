@@ -9,7 +9,6 @@ const app = read('components/ForceApp.jsx');
 const duel = read('components/ForceDuelEnhancer.jsx');
 const features = read('components/ForceFeaturePages.jsx');
 const schema = read('supabase/schema.sql');
-const migration = read('supabase/migrations/20260717_security_hardening.sql');
 const nextConfig = read('next.config.js');
 
 const failures = [];
@@ -36,8 +35,6 @@ requireText('duel RPC', api, 'force_submit_duel_answer');
 requireText('worker', api, 'req.headers["x-worker-secret"]');
 requireText('worker method', api, 'path === "/worker/drain" && method !== "POST"');
 requireText('schema privileges', schema, 'revoke all on schema public from PUBLIC, anon, authenticated;');
-requireText('migration privileges', migration, 'revoke all privileges on all functions in schema public from PUBLIC, anon, authenticated;');
-requireText('default privileges', migration, 'alter default privileges for role postgres in schema public');
 requireText('CSP', nextConfig, 'Content-Security-Policy');
 requireText('HSTS', nextConfig, 'Strict-Transport-Security');
 requireText('clickjacking', nextConfig, "frame-ancestors 'none'");

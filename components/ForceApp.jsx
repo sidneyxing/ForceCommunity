@@ -2027,16 +2027,11 @@ export default function ForceApp() {
   }, [me?.id]);
 
   const restoreSession = useCallback(async () => {
-    const hasToken = Boolean(getStoredSessionToken());
-    if (!hasToken) {
-      setBooting(false);
-      return;
-    }
     try {
       await refreshMe();
       setPage('home');
     } catch {
-        setMe(null);
+      setMe(null);
       setDashboard(null);
     } finally {
       setBooting(false);
@@ -2070,8 +2065,13 @@ export default function ForceApp() {
   }, []);
 
   const login = async (payload) => {
-    const data = await api('/api/auth/login', { method: 'POST', body: payload });
+    await api('/api/auth/login', { method: 'POST', body: payload });
     await refreshMe();
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('force:session-login'));
+    }
+
     setPage('home');
     setMusicMode('idle');
   };
@@ -2086,10 +2086,17 @@ export default function ForceApp() {
     } catch {
       // Continue local logout anyway.
     }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('force:session-logout'));
+    }
+
     stopMusic();
     setMe(null);
     setDashboard(null);
     setSchoolFeature(null);
+    setRequests([]);
+    setOutgoing([]);
     setPage('home');
   };
 

@@ -68,6 +68,8 @@ function findPortalTargets() {
 
 export default function ForceDuelEnhancer() {
   const [mounted, setMounted] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [targets, setTargets] = useState({ panel: null, idle: null, body: null });
   const [categories, setCategories] = useState(FALLBACK_CATEGORIES);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -108,12 +110,63 @@ export default function ForceDuelEnhancer() {
   }, []);
 
   useEffect(() => {
+    if (!mounted) return undefined;
+
+    let cancelled = false;
+
+    const checkSession = async () => {
+      try {
+        await api('/api/me');
+        if (!cancelled) setAuthenticated(true);
+      } catch {
+        if (!cancelled) setAuthenticated(false);
+      } finally {
+        if (!cancelled) setAuthChecked(true);
+      }
+    };
+
+    const handleLogin = () => {
+      setAuthenticated(true);
+      setAuthChecked(true);
+    };
+
+    const handleLogout = () => {
+      setAuthenticated(false);
+      setAuthChecked(true);
+      setMembersOpen(false);
+      setMembers([]);
+      setRequests([]);
+      setOutgoing([]);
+      setWaiting(false);
+      setMatchFound(false);
+      setBusy('');
+      setMessage('');
+      handledAcceptedRef.current.clear();
+      pendingQuickDuelRef.current = null;
+      if (quickDuelTimerRef.current) {
+        window.clearTimeout(quickDuelTimerRef.current);
+        quickDuelTimerRef.current = null;
+      }
+    };
+
+    checkSession();
+    window.addEventListener('force:session-login', handleLogin);
+    window.addEventListener('force:session-logout', handleLogout);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('force:session-login', handleLogin);
+      window.removeEventListener('force:session-logout', handleLogout);
+    };
+  }, [mounted]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => setTick((current) => current + 1), 1000);
     return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    if (!mounted || !getStoredSessionToken()) return undefined;
+    if (!mounted || !authChecked || !authenticated) return undefined;
     let cancelled = false;
     api('/api/duel/categories')
       .then((payload) => {
@@ -124,10 +177,10 @@ export default function ForceDuelEnhancer() {
       })
       .catch(() => setCategories(FALLBACK_CATEGORIES));
     return () => { cancelled = true; };
-  }, [mounted, selectedCategory]);
+  }, [authenticated, authChecked, mounted, selectedCategory]);
 
   const loadRequests = useCallback(async () => {
-    if (!getStoredSessionToken()) return;
+    if (!authenticated) return;
     try {
       const data = await api('/api/duel-requests');
       const receivedAt = Date.now();
@@ -150,17 +203,17 @@ export default function ForceDuelEnhancer() {
     } catch {
       // Keep this watcher silent when the user is not logged in or the network is unstable.
     }
-  }, [showMessage]);
+  }, [authenticated, showMessage]);
 
   useEffect(() => {
-    if (!mounted || !getStoredSessionToken()) return undefined;
+    if (!mounted || !authChecked || !authenticated) return undefined;
     loadRequests();
     const timer = window.setInterval(loadRequests, 1000);
     return () => window.clearInterval(timer);
-  }, [loadRequests, mounted]);
+  }, [authenticated, authChecked, loadRequests, mounted]);
 
   const loadMembers = useCallback(async (silent = false) => {
-    if (!membersOpen || !getStoredSessionToken()) return;
+    if (!membersOpen || !authenticated) return;
     if (!silent) setBusy((current) => current || 'members');
     try {
       const data = await api(`/api/members?q=${encodeURIComponent(memberSearch)}&tab=all`);
@@ -170,7 +223,7 @@ export default function ForceDuelEnhancer() {
     } finally {
       if (!silent) setBusy((current) => current === 'members' ? '' : current);
     }
-  }, [memberSearch, membersOpen, showMessage]);
+  }, [authenticated, memberSearch, membersOpen, showMessage]);
 
   useEffect(() => {
     if (!membersOpen) return undefined;
@@ -189,7 +242,7 @@ export default function ForceDuelEnhancer() {
   }, [categories, selectedCategory]);
 
   const quickMatch = async () => {
-    if (busy || waiting) return;
+    if (!authenticated || busy || waiting) return;
     setBusy('quick');
     setMatchFound(false);
     showMessage('');
@@ -226,7 +279,7 @@ export default function ForceDuelEnhancer() {
   };
 
   useEffect(() => {
-    if (!waiting || !getStoredSessionToken()) return undefined;
+    if (!waiting || !authenticated) return undefined;
     const timer = window.setInterval(async () => {
       if (pendingQuickDuelRef.current) return;
       if (matchStatusBusyRef.current) return;
@@ -254,9 +307,10 @@ export default function ForceDuelEnhancer() {
       }
     }, 300);
     return () => window.clearInterval(timer);
-  }, [showMessage, waiting]);
+  }, [authenticated, showMessage, waiting]);
 
   const cancelQuickMatch = async () => {
+    if (!authenticated) return;
     setBusy('cancel');
     try {
       const data = await api('/api/duel/matchmaking/cancel', { method: 'POST' });
@@ -281,7 +335,7 @@ export default function ForceDuelEnhancer() {
   };
 
   const inviteMember = async (member) => {
-    if (!member?.id || busy) return;
+    if (!authenticated || !member?.id || busy) return;
     setBusy(`invite:${member.id}`);
     try {
       const data = await api(`/api/members/${member.id}/invite`, {
@@ -298,7 +352,7 @@ export default function ForceDuelEnhancer() {
   };
 
   const respondInvite = async (request, action) => {
-    if (!request?.id || busy) return;
+    if (!authenticated || !request?.id || busy) return;
     setBusy(`${action}:${request.id}`);
     try {
       const data = await api(`/api/duel-requests/${request.id}/respond`, {
@@ -327,8 +381,8 @@ export default function ForceDuelEnhancer() {
   }, [members]);
 
   const invitation = requests.find((request) => secondsLeft(request) > 0);
-  const canRenderControls = mounted && targets.idle && isDuelPageActive();
-  const canRenderInviteBar = mounted && targets.body && invitation;
+  const canRenderControls = mounted && authChecked && authenticated && targets.idle && isDuelPageActive();
+  const canRenderInviteBar = mounted && authChecked && authenticated && targets.body && invitation;
 
   const controls = canRenderControls ? createPortal(
     <section className="force-duel-control-panel" aria-label="Duel setup">
