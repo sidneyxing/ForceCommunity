@@ -280,13 +280,34 @@ export default function ForceDuelEnhancer() {
 
   useEffect(() => {
     if (!waiting || !authenticated) return undefined;
-    const timer = window.setInterval(async () => {
-      if (pendingQuickDuelRef.current) return;
-      if (matchStatusBusyRef.current) return;
+
+    let cancelled = false;
+    let timer = null;
+
+    const scheduleNextPoll = (poll) => {
+      if (cancelled) return;
+
+      // Spread requests between 900-1,400 ms so many players do not poll
+      // the matchmaking endpoint at exactly the same moment.
+      const delay = 900 + Math.floor(Math.random() * 500);
+      timer = window.setTimeout(poll, delay);
+    };
+
+    const pollMatchmakingStatus = async () => {
+      if (cancelled) return;
+
+      if (pendingQuickDuelRef.current || matchStatusBusyRef.current) {
+        scheduleNextPoll(pollMatchmakingStatus);
+        return;
+      }
+
+      let shouldContinue = true;
       matchStatusBusyRef.current = true;
+
       try {
         const data = await api('/api/duel/matchmaking/status');
         if (data.duel?.id) {
+          shouldContinue = false;
           setWaiting(false);
           setMatchFound(true);
           showMessage('Lawan ditemukan. Menyiapkan arena...');
@@ -294,19 +315,29 @@ export default function ForceDuelEnhancer() {
         } else if (data.matching) {
           setMatchFound(true);
         } else if (data.cancelled) {
+          shouldContinue = false;
           setWaiting(false);
           setMatchFound(false);
           showMessage(data.message || 'Pencarian lawan telah dibatalkan.');
         }
       } catch (error) {
         // A temporary network failure must not cancel matchmaking. The next
-        // tick retries automatically while the loading state stays visible.
+        // poll retries automatically while the loading state stays visible.
         showMessage('Koneksi terputus sebentar. Mencoba menyambung kembali...');
       } finally {
         matchStatusBusyRef.current = false;
+        if (shouldContinue) scheduleNextPoll(pollMatchmakingStatus);
       }
-    }, 300);
-    return () => window.clearInterval(timer);
+    };
+
+    // Delay the first request too, preventing all clients from starting
+    // their first polling request in the same millisecond.
+    scheduleNextPoll(pollMatchmakingStatus);
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
   }, [authenticated, showMessage, waiting]);
 
   const cancelQuickMatch = async () => {

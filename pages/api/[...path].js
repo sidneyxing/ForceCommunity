@@ -1701,59 +1701,30 @@ async function joinMatchmaking(db, user, categoryKey = "") {
 
 async function joinMatchmakingSupabase(db, user, categoryKey = "") {
   categoryKey = parseDuelCategorySelection(categoryKey);
-  await cleanupMatchQueue(db);
 
-  const activeDuelId = await activeDuelIdForUser(db, user.id);
-  if (activeDuelId) {
-    const activeDuel = unwrap(await db.from("duels").select("*").eq("id", activeDuelId).maybeSingle());
-    if (activeDuel && activeDuel.status === "active" && isDuelParticipant(activeDuel, user.id)) {
-      return { duel: await duelPayload(db, activeDuel, user.id), alreadyInDuel: true };
+  const matchResult = await db.rpc("force_matchmake_duel", {
+    p_user_id: user.id,
+    p_category_key: categoryKey || null,
+    p_daily_limit: DAILY_DUEL_LIMIT,
+    p_start_buffer_ms: DUEL_START_BUFFER_MS,
+  });
+  if (matchResult.error) throw normalizeDuelPoolError(matchResult.error);
+
+  const match = matchResult.data || {};
+  if (match.state === "matched" && match.duel_id) {
+    const duel = unwrap(await db
+      .from("duels")
+      .select("*")
+      .eq("id", match.duel_id)
+      .maybeSingle());
+    if (!duel || duel.status !== "active" || !isDuelParticipant(duel, user.id)) {
+      throw Object.assign(new Error("Duel hasil matchmaking tidak ditemukan."), { status: 500 });
     }
+    return {
+      duel: await duelPayload(db, duel, user.id),
+      alreadyInDuel: Boolean(match.already_in_duel),
+    };
   }
-
-  const todayCount = await duelsTodayCount(db, user.id);
-  if (todayCount >= DAILY_DUEL_LIMIT) {
-    throw Object.assign(new Error(`Limit ${DAILY_DUEL_LIMIT} duel per hari sudah tercapai.`), { status: 429 });
-  }
-
-  let candidateQuery = db
-    .from("duel_queue")
-    .select("user_id, category_key, updated_at, last_seen_at")
-    .eq("status", "waiting")
-    .eq("play_mode", duelPlayMode(categoryKey))
-    .neq("user_id", user.id)
-    .order("updated_at", { ascending: true })
-    .limit(8);
-  candidateQuery = categoryKey ? candidateQuery.eq("category_key", categoryKey) : candidateQuery.is("category_key", null);
-  const candidates = unwrap(await candidateQuery);
-
-  for (const candidate of candidates) {
-    const candidateActive = await activeDuelIdForUser(db, candidate.user_id);
-    if (candidateActive) {
-      await db.from("duel_queue").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("user_id", candidate.user_id);
-      continue;
-    }
-    try {
-      const duel = await createDuel(db, user, candidate.user_id, categoryKey);
-      await db.from("duel_queue").upsert([
-        { user_id: user.id, play_mode: duelPlayMode(categoryKey), category_key: categoryKey || null, status: "matched", duel_id: duel.id, last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-        { user_id: candidate.user_id, play_mode: duelPlayMode(categoryKey), category_key: categoryKey || null, status: "matched", duel_id: duel.id, last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-      ], { onConflict: "user_id" });
-      return { duel };
-    } catch (error) {
-      console.warn("FORCE_SUPABASE_MATCH_CANDIDATE_FAILED", error?.message || error);
-    }
-  }
-
-  unwrap(await db.from("duel_queue").upsert({
-    user_id: user.id,
-    play_mode: duelPlayMode(categoryKey),
-    category_key: categoryKey || null,
-    status: "waiting",
-    duel_id: null,
-    last_seen_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "user_id" }));
 
   return {
     waiting: true,
@@ -1842,11 +1813,10 @@ async function matchmakingStatusSupabase(res, db, user) {
     });
   }
 
-  unwrap(await db.from("duel_queue").update({
-    updated_at: new Date().toISOString(),
-    last_seen_at: new Date().toISOString(),
-  }).eq("user_id", user.id).eq("status", "waiting"));
-  return send(res, 200, { waiting: true, category_key: queue.category_key || null, category_label: duelCategoryLabel(queue.category_key || "") });
+  // The atomic RPC refreshes the heartbeat and retries pairing in one database
+  // transaction, so two simultaneous entrants cannot remain stuck waiting.
+  const retry = await joinMatchmakingSupabase(db, user, queue.category_key || "");
+  return send(res, 200, retry);
 }
 
 async function cancelMatchmaking(res, db, user) {

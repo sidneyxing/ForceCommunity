@@ -185,6 +185,10 @@ create table if not exists public.questions (
 
   active boolean not null default true,
 
+  -- Stable random key used for indexed question selection during high-concurrency matchmaking.
+  matchmaking_key double precision not null default random(),
+
+  constraint questions_matchmaking_key_range check (matchmaking_key >= 0 and matchmaking_key < 1),
   constraint questions_subcategory_format check (subcategory = '' or subcategory ~ '^[a-z0-9_ -]{2,48}$')
 );
 
@@ -193,6 +197,30 @@ alter table public.questions drop column if exists category;
 alter table public.questions drop column if exists random_key;
 alter table public.questions drop column if exists created_at;
 alter table public.questions drop column if exists updated_at;
+
+-- Safe re-run upgrade for databases created before high-concurrency matchmaking.
+alter table public.questions
+  add column if not exists matchmaking_key double precision default random();
+update public.questions
+   set matchmaking_key = random()
+ where matchmaking_key is null;
+alter table public.questions alter column matchmaking_key set default random();
+alter table public.questions alter column matchmaking_key set not null;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conname = 'questions_matchmaking_key_range'
+       and conrelid = 'public.questions'::regclass
+  ) then
+    alter table public.questions
+      add constraint questions_matchmaking_key_range
+      check (matchmaking_key >= 0 and matchmaking_key < 1);
+  end if;
+end;
+$$;
 
 -- =========================================================
 -- 4. Permanent duel summary + short-lived answer details
@@ -276,6 +304,62 @@ create table if not exists public.duel_queue (
   constraint duel_queue_category_mode_check check ((play_mode = 'mix' and category_key is null) or (play_mode = 'category' and category_key is not null))
 );
 
+-- Universal active-duel reservation. The primary key guarantees that a player
+-- cannot enter two active duels, even if another backend flow creates duels.
+create table if not exists public.duel_active_participants (
+  user_id text primary key references public.users(id) on delete cascade,
+  duel_id text not null references public.duels(id) on delete cascade,
+  reserved_at timestamptz not null default now(),
+  unique (duel_id, user_id)
+);
+
+-- Remove stale reservations before a safe schema re-run.
+delete from public.duel_active_participants ap
+where not exists (
+  select 1
+    from public.duels d
+   where d.id = ap.duel_id
+     and d.status = 'active'
+     and ap.user_id in (d.user_id, d.opponent_id)
+);
+
+-- Refuse migration when production already contains duplicate active participants.
+do $$
+begin
+  if exists (
+    select participant_id
+      from (
+        select d.user_id as participant_id
+          from public.duels d
+         where d.status = 'active'
+        union all
+        select d.opponent_id
+          from public.duels d
+         where d.status = 'active'
+           and d.opponent_id is not null
+      ) active_players
+     group by participant_id
+    having count(*) > 1
+  ) then
+    raise exception 'DUPLICATE_ACTIVE_DUEL_PARTICIPANT_FOUND';
+  end if;
+end;
+$$;
+
+insert into public.duel_active_participants (user_id, duel_id, reserved_at)
+select active_players.user_id, active_players.duel_id, active_players.reserved_at
+from (
+  select d.user_id, d.id as duel_id, d.started_at as reserved_at
+    from public.duels d
+   where d.status = 'active'
+  union all
+  select d.opponent_id, d.id, d.started_at
+    from public.duels d
+   where d.status = 'active'
+     and d.opponent_id is not null
+) active_players
+on conflict (user_id) do nothing;
+
 create table if not exists public.duel_requests (
   id text primary key,
   requester_id text not null references public.users(id) on delete cascade,
@@ -321,6 +405,12 @@ drop index if exists idx_questions_pick_all;
 create index if not exists idx_questions_pick_category on public.questions (category_key, active);
 create index if not exists idx_questions_pick_all on public.questions (active);
 create index if not exists idx_questions_subcategory on public.questions (category_key, subcategory) where active = true;
+create index if not exists idx_questions_match_category_pick
+  on public.questions (category_key, matchmaking_key, id)
+  where active = true;
+create index if not exists idx_questions_match_all_pick
+  on public.questions (matchmaking_key, id)
+  where active = true;
 
 create index if not exists idx_user_category_stats_category on public.user_category_stats (category_key, correct_count desc);
 
@@ -334,6 +424,10 @@ create index if not exists idx_duel_answers_user_answered on public.duel_answers
 create index if not exists idx_duel_answers_category on public.duel_answers (category_key, answered_at desc);
 
 create index if not exists idx_duel_queue_waiting on public.duel_queue (play_mode, category_key, status, updated_at, last_seen_at);
+create index if not exists idx_duel_queue_match_waiting
+  on public.duel_queue (play_mode, category_key, updated_at, user_id)
+  include (last_seen_at)
+  where status = 'waiting';
 create index if not exists idx_duel_requests_target on public.duel_requests (target_id, status, created_at desc);
 create index if not exists idx_duel_requests_requester on public.duel_requests (requester_id, target_id, status);
 create index if not exists idx_duel_requests_expiry on public.duel_requests (status, expires_at);
@@ -523,43 +617,95 @@ security definer
 set search_path = public
 as $$
 declare
-  v_ids text[];
+  v_ids text[] := array[]::text[];
+  v_wrap_ids text[] := array[]::text[];
   v_category text := nullif(public.force_question_category_key(coalesce(p_category_key, '')), '');
+  v_non_core_mix boolean := lower(trim(coalesce(p_category_key, ''))) in ('mix', 'all', 'random');
+  v_pivot double precision := random();
+  v_missing integer;
+  v_exclusions text[] := coalesce(p_exclude_ids, array[]::text[]);
 begin
   if p_limit <= 0 then
     raise exception 'QUESTION_LIMIT_MUST_BE_POSITIVE';
   end if;
 
-  if p_category_key is null or lower(p_category_key) in ('', 'mix', 'all', 'random') then
+  if p_category_key is null or lower(trim(p_category_key)) = '' then
+    v_category := null;
+    v_non_core_mix := false;
+  elsif v_non_core_mix then
     v_category := null;
   end if;
 
-  -- Simple random picker. With FORCE's current question-bank size, this is clean and cheap enough.
-  -- Optional exclusions are passed through p_exclude_ids.
-  select array_agg(id order by pick_order)
+  -- Start at a random indexed pivot and wrap once. This avoids sorting the
+  -- complete active question bank with ORDER BY random() for every duel.
+  select coalesce(array_agg(picked.id order by picked.matchmaking_key, picked.id), array[]::text[])
     into v_ids
     from (
-      select q.id, random() as pick_order
+      select q.id, q.matchmaking_key
         from public.questions q
        where q.active = true
          and (v_category is null or q.category_key = v_category)
-         and not (q.id = any(coalesce(p_exclude_ids, array[]::text[])))
-       order by pick_order
+         and (not v_non_core_mix or q.category_key <> 'force_core')
+         and q.matchmaking_key >= v_pivot
+         and not (q.id = any(v_exclusions))
+       order by q.matchmaking_key, q.id
        limit p_limit
     ) picked;
 
-  -- Fallback: if recent history excludes too many questions, ignore recent exclusions.
-  if coalesce(array_length(v_ids, 1), 0) < p_limit then
-    select array_agg(id order by pick_order)
-      into v_ids
+  v_missing := p_limit - coalesce(array_length(v_ids, 1), 0);
+  if v_missing > 0 then
+    select coalesce(array_agg(picked.id order by picked.matchmaking_key, picked.id), array[]::text[])
+      into v_wrap_ids
       from (
-        select q.id, random() as pick_order
+        select q.id, q.matchmaking_key
           from public.questions q
          where q.active = true
            and (v_category is null or q.category_key = v_category)
-         order by pick_order
+           and (not v_non_core_mix or q.category_key <> 'force_core')
+           and q.matchmaking_key < v_pivot
+           and not (q.id = any(v_exclusions))
+           and not (q.id = any(v_ids))
+         order by q.matchmaking_key, q.id
+         limit v_missing
+      ) picked;
+    v_ids := v_ids || v_wrap_ids;
+  end if;
+
+  -- Fallback: recent-history exclusions may leave too few rows. Retry without
+  -- those exclusions, while still using the indexed pivot scan.
+  if coalesce(array_length(v_ids, 1), 0) < p_limit then
+    v_ids := array[]::text[];
+
+    select coalesce(array_agg(picked.id order by picked.matchmaking_key, picked.id), array[]::text[])
+      into v_ids
+      from (
+        select q.id, q.matchmaking_key
+          from public.questions q
+         where q.active = true
+           and (v_category is null or q.category_key = v_category)
+           and (not v_non_core_mix or q.category_key <> 'force_core')
+           and q.matchmaking_key >= v_pivot
+         order by q.matchmaking_key, q.id
          limit p_limit
       ) picked;
+
+    v_missing := p_limit - coalesce(array_length(v_ids, 1), 0);
+    if v_missing > 0 then
+      select coalesce(array_agg(picked.id order by picked.matchmaking_key, picked.id), array[]::text[])
+        into v_wrap_ids
+        from (
+          select q.id, q.matchmaking_key
+            from public.questions q
+           where q.active = true
+             and (v_category is null or q.category_key = v_category)
+             and (not v_non_core_mix or q.category_key <> 'force_core')
+             and q.matchmaking_key < v_pivot
+             and not (q.id = any(v_ids))
+           order by q.matchmaking_key, q.id
+           limit v_missing
+        ) picked;
+      v_ids := v_ids || v_wrap_ids;
+    end if;
   end if;
 
   if coalesce(array_length(v_ids, 1), 0) < p_limit then
@@ -569,6 +715,270 @@ begin
   return v_ids;
 end;
 $$;
+
+-- Keep active participant reservations synchronized with every duel write.
+create or replace function public.force_sync_active_duel_participants()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'DELETE' then
+    delete from public.duel_active_participants where duel_id = old.id;
+    return old;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    delete from public.duel_active_participants where duel_id = old.id;
+  end if;
+
+  if new.status = 'active' then
+    insert into public.duel_active_participants (user_id, duel_id, reserved_at)
+    values (new.user_id, new.id, coalesce(new.started_at, now()));
+
+    if new.opponent_id is not null and new.opponent_id is distinct from new.user_id then
+      insert into public.duel_active_participants (user_id, duel_id, reserved_at)
+      values (new.opponent_id, new.id, coalesce(new.started_at, now()));
+    end if;
+  end if;
+
+  return new;
+exception
+  when unique_violation then
+    raise exception 'PLAYER_ALREADY_IN_ACTIVE_DUEL' using errcode = '23505';
+end;
+$$;
+
+drop trigger if exists trg_duels_active_participants_insert_delete on public.duels;
+create trigger trg_duels_active_participants_insert_delete
+after insert or delete on public.duels
+for each row execute function public.force_sync_active_duel_participants();
+
+drop trigger if exists trg_duels_active_participants_update on public.duels;
+create trigger trg_duels_active_participants_update
+after update of status, user_id, opponent_id on public.duels
+for each row execute function public.force_sync_active_duel_participants();
+
+-- Atomically enqueue or match one quick-match player.
+-- The candidate row lock prevents two concurrent callers from claiming the
+-- same opponent. Duel creation and queue updates commit in the same transaction.
+create or replace function public.force_matchmake_duel(
+  p_user_id text,
+  p_category_key text default null,
+  p_daily_limit integer default 7,
+  p_start_buffer_ms integer default 2000
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_now timestamptz := clock_timestamp();
+  v_today_start timestamptz :=
+    date_trunc('day', clock_timestamp() at time zone 'Asia/Jakarta')
+      at time zone 'Asia/Jakarta';
+  v_category text;
+  v_play_mode text;
+  v_existing public.duel_queue%rowtype;
+  v_opponent public.duel_queue%rowtype;
+  v_opponent_name text;
+  v_duel_id text;
+  v_main_ids text[];
+  v_core_ids text[];
+  v_question_ids text[];
+  v_daily_count integer;
+begin
+  if nullif(trim(coalesce(p_user_id, '')), '') is null then
+    raise exception 'INVALID_USER';
+  end if;
+  if p_daily_limit < 1 or p_daily_limit > 100 then
+    raise exception 'INVALID_DAILY_LIMIT';
+  end if;
+  if p_start_buffer_ms < 0 or p_start_buffer_ms > 30000 then
+    raise exception 'INVALID_START_BUFFER';
+  end if;
+
+  if p_category_key is null
+     or lower(trim(p_category_key)) in ('', 'mix', 'all', 'random') then
+    v_category := null;
+    v_play_mode := 'mix';
+  else
+    v_category := public.force_question_category_key(p_category_key);
+    if not exists (
+      select 1
+      from public.question_categories c
+      where c.key = v_category
+        and c.active = true
+        and c.key <> 'force_core'
+    ) then
+      raise exception 'INVALID_DUEL_CATEGORY';
+    end if;
+    v_play_mode := 'category';
+  end if;
+
+  if not exists (select 1 from public.users u where u.id = p_user_id) then
+    raise exception 'USER_NOT_FOUND';
+  end if;
+
+  -- Serializes duplicate start/status calls made by the same device/user.
+  select *
+    into v_existing
+    from public.duel_queue q
+   where q.user_id = p_user_id
+   for update;
+
+  if found
+     and v_existing.status = 'matched'
+     and v_existing.duel_id is not null
+     and exists (
+       select 1
+       from public.duels d
+       where d.id = v_existing.duel_id
+         and d.status = 'active'
+         and p_user_id in (d.user_id, d.opponent_id)
+     ) then
+    return jsonb_build_object(
+      'state', 'matched',
+      'duel_id', v_existing.duel_id,
+      'category_key', v_existing.category_key
+    );
+  end if;
+
+  select ap.duel_id
+    into v_duel_id
+    from public.duel_active_participants ap
+   where ap.user_id = p_user_id
+   limit 1;
+  if v_duel_id is not null then
+    return jsonb_build_object('state', 'matched', 'duel_id', v_duel_id);
+  end if;
+
+  select count(*)::integer
+    into v_daily_count
+    from public.duels d
+   where d.started_at >= v_today_start
+     and p_user_id in (d.user_id, d.opponent_id);
+  if v_daily_count >= p_daily_limit then
+    raise exception 'LIMIT_REACHED';
+  end if;
+
+  insert into public.duel_queue (
+    user_id, play_mode, category_key, status, duel_id, last_seen_at, updated_at
+  ) values (
+    p_user_id, v_play_mode, v_category, 'waiting', null, v_now, v_now
+  )
+  on conflict (user_id) do update
+    set play_mode = excluded.play_mode,
+        category_key = excluded.category_key,
+        status = 'waiting',
+        duel_id = null,
+        last_seen_at = excluded.last_seen_at,
+        updated_at = excluded.updated_at;
+
+  -- Oldest compatible, online candidate wins. SKIP LOCKED lets many pairs form
+  -- concurrently without making all callers wait behind one queue row.
+  select q.*
+    into v_opponent
+    from public.duel_queue q
+    join public.users u on u.id = q.user_id
+   where q.status = 'waiting'
+     and q.user_id <> p_user_id
+     and q.play_mode = v_play_mode
+     and q.category_key is not distinct from v_category
+     and q.last_seen_at >= v_now - interval '5 minutes'
+     and u.last_seen_at >= v_now - interval '2 minutes'
+     and not exists (
+       select 1
+         from public.duel_active_participants active_player
+        where active_player.user_id = q.user_id
+     )
+     and (
+       select count(*)
+       from public.duels daily_duel
+       where daily_duel.started_at >= v_today_start
+         and q.user_id in (daily_duel.user_id, daily_duel.opponent_id)
+     ) < p_daily_limit
+   order by q.updated_at asc, q.user_id asc
+   for update of q skip locked
+   limit 1;
+
+  if not found then
+    return jsonb_build_object(
+      'state', 'waiting',
+      'category_key', v_category,
+      'play_mode', v_play_mode
+    );
+  end if;
+
+  select u.username
+    into v_opponent_name
+    from public.users u
+   where u.id = v_opponent.user_id;
+
+  if v_category is not null then
+    v_main_ids := public.force_pick_question_ids(
+      v_category, 4, array[]::text[]
+    );
+    v_core_ids := public.force_pick_question_ids(
+      'force_core', 1, coalesce(v_main_ids, array[]::text[])
+    );
+    v_question_ids := v_main_ids || v_core_ids;
+  else
+    v_core_ids := public.force_pick_question_ids(
+      'force_core', 1, array[]::text[]
+    );
+    v_main_ids := public.force_pick_question_ids(
+      'mix', 4, coalesce(v_core_ids, array[]::text[])
+    );
+    v_question_ids := v_main_ids || v_core_ids;
+  end if;
+
+  if coalesce(array_length(v_question_ids, 1), 0) <> 5
+     or (
+       select count(distinct picked_id)
+       from unnest(v_question_ids) as picked(picked_id)
+     ) <> 5 then
+    raise exception 'NOT_ENOUGH_ACTIVE_QUESTIONS';
+  end if;
+
+  v_duel_id := 'duel_' || replace(gen_random_uuid()::text, '-', '');
+
+  insert into public.duels (
+    id, user_id, opponent_id, opponent_name, play_mode, category_key,
+    status, started_at, starts_at
+  ) values (
+    v_duel_id, p_user_id, v_opponent.user_id,
+    coalesce(v_opponent_name, 'Force Rival'), v_play_mode, v_category,
+    'active', v_now, v_now + make_interval(secs => p_start_buffer_ms / 1000.0)
+  );
+
+  insert into public.duel_questions (duel_id, question_id, position)
+  select v_duel_id, picked.question_id, picked.position::smallint
+  from unnest(v_question_ids) with ordinality picked(question_id, position);
+
+  update public.duel_queue
+     set status = 'matched',
+         duel_id = v_duel_id,
+         last_seen_at = v_now,
+         updated_at = v_now
+   where user_id in (p_user_id, v_opponent.user_id);
+
+  return jsonb_build_object(
+    'state', 'matched',
+    'duel_id', v_duel_id,
+    'opponent_id', v_opponent.user_id,
+    'category_key', v_category,
+    'play_mode', v_play_mode
+  );
+end;
+$$;
+
+revoke all on function public.force_matchmake_duel(text, text, integer, integer) from public;
+revoke all on function public.force_matchmake_duel(text, text, integer, integer) from anon;
+revoke all on function public.force_matchmake_duel(text, text, integer, integer) from authenticated;
+grant execute on function public.force_matchmake_duel(text, text, integer, integer) to service_role;
 
 -- Compatibility for older API code that still calls get_daily_duel_question_ids().
 -- This does not create any daily pool table.
@@ -977,11 +1387,12 @@ alter table public.duels enable row level security;
 alter table public.duel_questions enable row level security;
 alter table public.duel_answers enable row level security;
 alter table public.duel_queue enable row level security;
+alter table public.duel_active_participants enable row level security;
 alter table public.duel_requests enable row level security;
 alter table public.weekly_rank_snapshots enable row level security;
 
 insert into public.system_settings (key, value, updated_at) values
-  ('schema_version', 'force_clean_schema_v5_0', now()),
+  ('schema_version', 'force_clean_schema_v5_1_matchmaking_1000', now()),
   ('badge_system_enabled', 'false', now()),
   ('temporary_supabase_retention_days', '2', now()),
   ('answer_detail_retention_days', '2', now()),
@@ -1307,14 +1718,14 @@ insert into public.shop_products (
   id, sku, category_id, name, subtitle, description, image_url,
   fp_price, stock, featured, badge, active, sort_order
 ) values
-  ('shop_product_keyboard', 'FORCE-TECH-001', 'shop_cat_tech', 'Mechanical Keyboard', 'RGB Wireless', 'Keyboard compact untuk belajar dan bekerja.', '/shop/mechanical-keyboard.svg', 4000, 12, true, 'Populer', true, 1),
-  ('shop_product_gimbal', 'FORCE-TECH-002', 'shop_cat_tech', 'Phone Gimbal', 'Mobile Stabilizer', 'Stabilizer sederhana untuk produksi konten mobile.', '/shop/phone-gimbal.svg', 2500, 10, true, 'Baru', true, 2),
-  ('shop_product_converter', 'FORCE-TECH-003', 'shop_cat_tech', 'Universal Converter', 'Travel Adapter', 'Adaptor perjalanan multi-port untuk kegiatan FORCE.', '/shop/universal-converter.svg', 1800, 18, true, 'Best Deal', true, 3),
-  ('shop_product_book', 'FORCE-BOOK-001', 'shop_cat_stationery', 'Buku Grow in Faith', 'Edisi Eksklusif', 'Notebook refleksi, target, dan perjalanan pertumbuhan.', '/shop/grow-in-faith-book.svg', 900, 30, true, 'Inspiratif', true, 4),
-  ('shop_product_pen', 'FORCE-STAT-001', 'shop_cat_stationery', 'Pulpen Aesthetic Set', '6 Warna', 'Satu set pulpen untuk catatan kelas dan mentoring.', '/shop/aesthetic-pen-set.svg', 350, 45, true, 'Favorit', true, 5),
-  ('shop_product_tshirt', 'FORCE-FASH-001', 'shop_cat_fashion', 'Kaos FORCE', 'Official Community Tee', 'Kaos komunitas untuk kegiatan resmi FORCE.', '/shop/force-tshirt.svg', 800, 24, false, '', true, 6),
-  ('shop_product_cap', 'FORCE-FASH-002', 'shop_cat_fashion', 'Topi FORCE', 'Classic Cap', 'Topi komunitas dengan identitas FORCE.', '/shop/force-cap.svg', 450, 24, false, '', true, 7),
-  ('shop_product_tote', 'FORCE-LIFE-001', 'shop_cat_lifestyle', 'Totebag Canvas', 'Daily Carry', 'Totebag ringan untuk buku dan perlengkapan harian.', '/shop/canvas-totebag.svg', 600, 20, false, '', true, 8)
+  ('shop_product_keyboard', 'FORCE-TECH-001', 'shop_cat_tech', 'Mechanical Keyboard', 'RGB Wireless', 'Keyboard compact untuk belajar dan bekerja.', '/shop/mechanical-keyboard.webp', 4000, 12, true, 'Populer', true, 1),
+  ('shop_product_gimbal', 'FORCE-TECH-002', 'shop_cat_tech', 'Phone Gimbal', 'Mobile Stabilizer', 'Stabilizer sederhana untuk produksi konten mobile.', '/shop/phone-gimbal.webp', 2500, 10, true, 'Baru', true, 2),
+  ('shop_product_converter', 'FORCE-TECH-003', 'shop_cat_tech', 'Universal Converter', 'Travel Adapter', 'Adaptor perjalanan multi-port untuk kegiatan FORCE.', '/shop/universal-converter.webp', 1800, 18, true, 'Best Deal', true, 3),
+  ('shop_product_book', 'FORCE-BOOK-001', 'shop_cat_stationery', 'Buku Grow in Faith', 'Edisi Eksklusif', 'Notebook refleksi, target, dan perjalanan pertumbuhan.', '/shop/grow-in-faith-book.webp', 900, 30, true, 'Inspiratif', true, 4),
+  ('shop_product_pen', 'FORCE-STAT-001', 'shop_cat_stationery', 'Pulpen Aesthetic Set', '6 Warna', 'Satu set pulpen untuk catatan kelas dan mentoring.', '/shop/aesthetic-pen-set.webp', 350, 45, true, 'Favorit', true, 5),
+  ('shop_product_tshirt', 'FORCE-FASH-001', 'shop_cat_fashion', 'Kaos FORCE', 'Official Community Tee', 'Kaos komunitas untuk kegiatan resmi FORCE.', '/shop/force-tshirt.webp', 800, 24, false, '', true, 6),
+  ('shop_product_cap', 'FORCE-FASH-002', 'shop_cat_fashion', 'Topi FORCE', 'Classic Cap', 'Topi komunitas dengan identitas FORCE.', '/shop/force-cap.webp', 450, 24, false, '', true, 7),
+  ('shop_product_tote', 'FORCE-LIFE-001', 'shop_cat_lifestyle', 'Totebag Canvas', 'Daily Carry', 'Totebag ringan untuk buku dan perlengkapan harian.', '/shop/canvas-totebag.webp', 600, 20, false, '', true, 8)
 on conflict (id) do update set
   sku = excluded.sku,
   category_id = excluded.category_id,
